@@ -495,6 +495,186 @@ export class DocsParser {
 
 ---
 
+## Knowledge Base / Reference Documentation
+
+When creating skills that provide reference documentation (knowledge bases), follow the **Progressive Disclosure** pattern for context-efficient, granular documentation.
+
+### Design Principles
+
+| Principle | Rule | Rationale |
+|-----------|------|-----------|
+| Single Responsibility | One topic per file | Easier to load only what's needed |
+| Table-First | Use markdown tables, not prose | Structured data is scannable and precise |
+| Under 3KB | Keep files between 1-2KB | Fits easily in context window |
+| Self-Contained | Each file understandable alone | No dependency chains to follow |
+| Include Examples | 1-2 practical examples per file | Shows usage, not just specification |
+
+### Directory Structure
+
+```
+skills/<skill-name>/references/
+├── index.md                    # Overview + links to all categories
+├── <category>/                 # One directory per topic category
+│   ├── <topic-a>.md           # Focused reference file
+│   ├── <topic-b>.md           # Focused reference file
+│   └── troubleshooting.md     # Common issues for this category
+└── releases.md                 # Changelog (if applicable)
+```
+
+### Reference File Format
+
+```markdown
+# Topic Title
+
+Brief one-line description of what this covers.
+
+## Section with Table
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string | yes | Field description |
+| `value` | number | no | Field description |
+
+## Example
+
+\`\`\`json
+{
+  "name": "example",
+  "value": 42
+}
+\`\`\`
+
+## See Also
+
+- [Related Topic](./related-topic.md)
+```
+
+### Generator Architecture
+
+```
+src/services/reference-generators/
+├── base-generator.ts           # Abstract base with common functionality
+├── <category>-references.ts    # Category-specific generator
+├── <category>-references.test.ts
+└── index.ts                    # Orchestrator + exports
+```
+
+**Base Generator Pattern:**
+```typescript
+export abstract class BaseReferenceGenerator {
+  constructor(
+    protected refManager: ReferenceManager,
+    protected config: { category: string; sourceUrls: string[] }
+  ) {}
+
+  abstract generate(): Promise<void>;
+  abstract generateFromContent(contents: Map<string, string>): Promise<void>;
+
+  // Shared utilities
+  protected async fetchDocumentation(url: string): Promise<string>;
+  protected async writeReference(path: string, topic: string, content: string): Promise<void>;
+  protected formatTable(headers: string[], rows: string[][]): string;
+}
+```
+
+**Generator Implementation Pattern:**
+```typescript
+export class CategoryReferenceGenerator extends BaseReferenceGenerator {
+  constructor(refManager: ReferenceManager) {
+    super(refManager, {
+      category: "category-name",
+      sourceUrls: ["source-doc.md"],
+    });
+  }
+
+  async generate(): Promise<void> {
+    const contents = await this.fetchAllSources();
+    await this.generateFromContent(contents);
+  }
+
+  async generateFromContent(contents: Map<string, string>): Promise<void> {
+    const sourceMd = contents.get("source-doc.md") || "";
+
+    await this.writeReference(
+      "topic-a.md",
+      "Topic A Title",
+      this.generateTopicA(sourceMd)
+    );
+  }
+
+  generateTopicA(content: string): string {
+    const lines: string[] = [];
+    lines.push("# Topic A Title");
+    lines.push("");
+    // ... build content with tables, examples
+    return lines.join("\n");
+  }
+}
+```
+
+### Supporting Services
+
+**ReferenceManager** - File I/O for nested reference paths:
+- `writeReference(ref)` - Write to nested path (creates directories)
+- `readReference(path)` - Read and extract topic from heading
+- `listReferences()` - List all .md files recursively
+- `generateIndex()` - Create index.md with links by category
+- `clearCategory(category)` - Remove all files in a category
+- `deleteReference(path)` - Remove single file
+
+**ContentExtractor** - Parse markdown for structured content:
+- `extractTables(markdown)` - Extract markdown tables as arrays
+- `extractSection(markdown, heading)` - Extract section by heading
+- `extractCodeBlocks(markdown)` - Extract fenced code blocks
+- `extractHeadings(markdown)` - Get all headings with levels
+- `extractBulletList(markdown)` - Get bullet list items
+
+### CLI Integration
+
+Add `--regenerate-refs` flag to update scripts:
+
+```typescript
+// Parse --regenerate-refs argument
+const regenerateRefsArg = args.find((a) => a.startsWith("--regenerate-refs"));
+const regenerateRefs = regenerateRefsArg !== undefined;
+const regenerateCategory = regenerateRefsArg?.includes("=")
+  ? regenerateRefsArg.split("=")[1]
+  : null;
+
+// Usage:
+// --regenerate-refs           Regenerate all categories
+// --regenerate-refs=hooks     Regenerate specific category
+```
+
+### Orchestrator Pattern
+
+```typescript
+export class ReferenceGeneratorOrchestrator {
+  constructor(private refManager: ReferenceManager) {}
+
+  getGenerator(category: GeneratorCategory) { /* factory method */ }
+
+  async generateCategory(category: GeneratorCategory): Promise<GeneratorResult>;
+  async generateAll(): Promise<GeneratorResult[]>;
+  async generateMultiple(categories: GeneratorCategory[]): Promise<GeneratorResult[]>;
+}
+```
+
+### Quality Checklist
+
+When creating reference documentation:
+
+- [ ] Each file covers exactly one topic
+- [ ] All structured data uses markdown tables
+- [ ] File size is under 3KB (ideally 1-2KB)
+- [ ] File is understandable without reading other files
+- [ ] Includes 1-2 practical examples
+- [ ] Has "See Also" links to related topics
+- [ ] Generator has tests (TDD)
+- [ ] `generateFromContent()` allows testing without fetching
+
+---
+
 ## Summary Checklist
 
 When adding new functionality:
