@@ -7,6 +7,12 @@
 import { DocsFetcher } from "../src/services/docs-fetcher.ts";
 import { DocsParser } from "../src/services/docs-parser.ts";
 import { CacheManager } from "../src/services/cache-manager.ts";
+import { ReferenceManager } from "../src/services/reference-manager.ts";
+import {
+  ReferenceGeneratorOrchestrator,
+  ALL_CATEGORIES,
+  type GeneratorCategory,
+} from "../src/services/reference-generators/index.ts";
 import { dirname, join } from "node:path";
 
 // Determine plugin root directory
@@ -19,6 +25,13 @@ const args = process.argv.slice(2);
 const forceUpdate = args.includes("--force") || args.includes("-f");
 const skipReleases = args.includes("--skip-releases");
 const skipDocs = args.includes("--skip-docs");
+
+// Parse --regenerate-refs argument
+const regenerateRefsArg = args.find((a) => a.startsWith("--regenerate-refs"));
+const regenerateRefs = regenerateRefsArg !== undefined;
+const regenerateCategory = regenerateRefsArg?.includes("=")
+  ? (regenerateRefsArg.split("=")[1] as GeneratorCategory)
+  : null;
 
 async function main() {
   const fetcher = new DocsFetcher();
@@ -85,7 +98,6 @@ async function main() {
 
     if (parsedDocs) {
       await cacheManager.generateReferences(parsedDocs, parsedReleases);
-      console.log(`  ✓ Generated: references/official-docs.md`);
       console.log(`  ✓ Generated: references/releases.md`);
     }
   }
@@ -93,7 +105,63 @@ async function main() {
   console.log("\n✓ Documentation update complete!");
 }
 
-main().catch((error) => {
-  console.error("Error:", error);
-  process.exit(1);
-});
+async function regenerateReferences() {
+  const refManager = new ReferenceManager(referencesDir);
+  const orchestrator = new ReferenceGeneratorOrchestrator(refManager);
+
+  if (regenerateCategory) {
+    // Validate category
+    if (!ALL_CATEGORIES.includes(regenerateCategory)) {
+      console.error(`Invalid category: ${regenerateCategory}`);
+      console.error(`Valid categories: ${ALL_CATEGORIES.join(", ")}`);
+      process.exit(1);
+    }
+
+    console.log(`Regenerating references for category: ${regenerateCategory}...\n`);
+    const result = await orchestrator.generateCategory(regenerateCategory);
+
+    if (result.success) {
+      console.log(`  ✓ Generated ${result.filesGenerated} files in ${result.category}/`);
+    } else {
+      console.error(`  ✗ Failed: ${result.error}`);
+      process.exit(1);
+    }
+  } else {
+    console.log("Regenerating all reference files...\n");
+    const results = await orchestrator.generateAll();
+
+    let totalFiles = 0;
+    let failed = 0;
+
+    for (const result of results) {
+      if (result.success) {
+        console.log(`  ✓ ${result.category}/: ${result.filesGenerated} files`);
+        totalFiles += result.filesGenerated || 0;
+      } else {
+        console.error(`  ✗ ${result.category}: ${result.error}`);
+        failed++;
+      }
+    }
+
+    console.log(`\nTotal: ${totalFiles} files generated`);
+    if (failed > 0) {
+      console.error(`${failed} categories failed`);
+      process.exit(1);
+    }
+  }
+
+  console.log("\n✓ Reference regeneration complete!");
+}
+
+// Main entry point
+if (regenerateRefs) {
+  regenerateReferences().catch((error) => {
+    console.error("Error:", error);
+    process.exit(1);
+  });
+} else {
+  main().catch((error) => {
+    console.error("Error:", error);
+    process.exit(1);
+  });
+}

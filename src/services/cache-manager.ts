@@ -93,11 +93,8 @@ export class CacheManager {
   ): Promise<void> {
     await mkdir(this.referencesDir, { recursive: true });
 
-    // Generate official docs reference
-    const docsMarkdown = this.generateDocsMarkdown(content);
-    await writeFile(join(this.referencesDir, "official-docs.md"), docsMarkdown);
-
-    // Generate releases reference
+    // Generate releases reference only
+    // (Progressive disclosure refs are generated separately via --regenerate-refs)
     const releasesMarkdown = this.generateReleasesMarkdown(releases);
     await writeFile(join(this.referencesDir, "releases.md"), releasesMarkdown);
   }
@@ -126,29 +123,6 @@ export class CacheManager {
 
     const data = JSON.parse(await readFile(cachePath, "utf-8")) as DocsCacheData;
     return data._metadata;
-  }
-
-  private generateDocsMarkdown(content: ParsedContent): string {
-    const lines: string[] = [];
-
-    lines.push(`# ${content.title}`);
-    lines.push("");
-    lines.push(`> Source: ${content.source}`);
-    lines.push(`> URL: ${content.url}`);
-    lines.push(`> Last fetched: ${content.fetchedAt.toISOString().split("T")[0]}`);
-    lines.push("");
-
-    for (const section of content.sections) {
-      const heading = "#".repeat(section.level) + " " + section.title;
-      lines.push(heading);
-      lines.push("");
-      if (section.content) {
-        lines.push(section.content);
-        lines.push("");
-      }
-    }
-
-    return lines.join("\n");
   }
 
   private generateReleasesMarkdown(releases: ParsedRelease[]): string {

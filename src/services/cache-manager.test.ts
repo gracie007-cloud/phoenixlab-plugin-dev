@@ -137,7 +137,7 @@ describe("CacheManager", () => {
   });
 
   describe("generateReferences", () => {
-    it("should generate markdown reference files", async () => {
+    it("should generate releases markdown file", async () => {
       const content: ParsedContent = {
         title: "Claude Code",
         source: "llms.txt",
@@ -162,22 +162,15 @@ describe("CacheManager", () => {
 
       await cacheManager.generateReferences(content, releases);
 
-      const docsRefFile = join(testReferencesDir, "official-docs.md");
       const releasesRefFile = join(testReferencesDir, "releases.md");
-
-      expect(await exists(docsRefFile)).toBe(true);
       expect(await exists(releasesRefFile)).toBe(true);
-
-      const docsContent = await readFile(docsRefFile, "utf-8");
-      expect(docsContent).toContain("Claude Code");
-      expect(docsContent).toContain("Getting Started");
 
       const releasesContent = await readFile(releasesRefFile, "utf-8");
       expect(releasesContent).toContain("v1.0.0");
       expect(releasesContent).toContain("Feature A");
     });
 
-    it("should include URL in generated docs markdown", async () => {
+    it("should handle empty releases", async () => {
       const content: ParsedContent = {
         title: "Claude Code",
         source: "llms.txt",
@@ -189,9 +182,8 @@ describe("CacheManager", () => {
 
       await cacheManager.generateReferences(content, []);
 
-      const docsRefFile = join(testReferencesDir, "official-docs.md");
-      const docsContent = await readFile(docsRefFile, "utf-8");
-      expect(docsContent).toContain("https://code.claude.com/docs/llms.txt");
+      const releasesRefFile = join(testReferencesDir, "releases.md");
+      expect(await exists(releasesRefFile)).toBe(true);
     });
   });
 
